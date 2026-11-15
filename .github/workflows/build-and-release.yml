@@ -1,0 +1,81 @@
+name: RyzeVanillaGen - native builds and verified release
+
+on:
+  push:
+    branches: [main, feature/standalone-vanillagen-release]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "New release tag (e.g. v0.1.1). Existing tags are immutable."
+        required: true
+        default: "v0.1.0"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Go 1.24 tests, vet and Linux native protocol contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+          cache: true
+      - name: Verify source and Go module
+        run: |
+          set -euo pipefail
+          test "$(go list -m)" = "github.com/RyzeCompany/RyzeVanillaGen"
+          go vet ./...
+          go test -count=1 ./...
+      - name: Build no-FMA Linux test binary and check exact protocol
+        run: bash scripts/build.sh v0.1.0 linux/amd64
+      - name: Upload candidate without publishing
+        uses: actions/upload-artifact@v4
+        with:
+          name: RyzeVanillaGen-linux-amd64-candidate
+          path: |
+            dist/vanillagen-linux-amd64
+            dist/vanillagen-linux-amd64.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publish immutable multi-architecture native release
+    needs: validate
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+          cache: true
+      - name: Build and hash release binaries
+        env:
+          RELEASE_TAG: ${{ github.event.inputs.tag || 'v0.1.0' }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Invalid release tag' >&2; exit 1; }
+          bash scripts/build.sh "$RELEASE_TAG"
+          (cd dist && sha256sum -c SHA256SUMS)
+          test "$(./dist/vanillagen-linux-amd64 -version)" = "vanillagen $RELEASE_TAG protocol 7 algorithm 4"
+      - name: Publish once; never overwrite an existing tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.inputs.tag || 'v0.1.0' }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists; refusing to replace immutable assets."
+            exit 0
+          fi
+          gh release create "$RELEASE_TAG" dist/SHA256SUMS dist/vanillagen-* \
+            --target "$GITHUB_SHA" --title "RyzeVanillaGen $RELEASE_TAG" \
+            --notes "Native vanilla worldgen core. Requires RyzeMP Go protocol 7, algorithm 4. Verify the provided SHA256SUMS. Binaries are external to RyzeMP.phar. LGPL-3.0-or-later; see source and attribution."
