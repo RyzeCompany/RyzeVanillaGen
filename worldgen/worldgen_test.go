@@ -12,7 +12,7 @@ import (
 )
 
 // The reference values are the PHP port's golden fixtures (computed with misode/deepslate 0.27.2, MIT).
-const fixturePath = "../../../tests/phpunit/world/generator/vanilla/deepslate-fixtures.json"
+const fixturePath = "../testdata/deepslate-fixtures.json"
 
 type fixtures struct {
 	NormalNoise      [][4]float64 `json:"normalNoise"`

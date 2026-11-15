@@ -22,7 +22,7 @@ type dimensionChunkFixture struct {
 // are compared.
 func TestDimensionFixtures(t *testing.T) {
 	data := testData(t)
-	b, err := os.ReadFile("../../../tests/phpunit/world/generator/vanilla/dimension-fixtures.json")
+	b, err := os.ReadFile("../testdata/dimension-fixtures.json")
 	if err != nil {
 		t.Fatal(err)
 	}

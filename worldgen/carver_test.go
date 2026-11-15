@@ -37,7 +37,7 @@ type chunkFixture struct {
 }
 
 func loadChunkFixtures(t *testing.T, name string) map[string][]chunkFixture {
-	b, err := os.ReadFile("../../../tests/phpunit/world/generator/vanilla/" + name)
+	b, err := os.ReadFile("../testdata/" + name)
 	if err != nil {
 		t.Fatal(err)
 	}
